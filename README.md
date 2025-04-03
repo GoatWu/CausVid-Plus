@@ -154,3 +154,108 @@ If you find CausVid useful or relevant to your research, please kindly cite our 
 
 Our implementation is largely based on the [Wan](https://github.com/Wan-Video/Wan2.1) model suite.
 
+# JSON合并工具
+
+这个工具用于合并两个JSON文件，特别适用于处理视频数据相关的JSON注释文件。
+
+## 功能特点
+
+- 支持合并JSON对象（字典）或JSON数组（列表）
+- 提供三种合并模式：覆盖、保留和追加
+- 处理合并过程中的键冲突
+- 提供详细的合并统计信息
+- 支持使用指定的字段作为键来检测重复项
+
+## 安装依赖
+
+```bash
+pip install tqdm
+```
+
+## 使用方法
+
+### 基本用法
+
+```bash
+python merge_json.py --input1 file1.json --input2 file2.json --output merged.json
+```
+
+### 高级选项
+
+```bash
+# 使用保留模式（冲突时保留第一个文件中的值）
+python merge_json.py --input1 file1.json --input2 file2.json --output merged.json --mode keep
+
+# 使用追加模式（为冲突的键添加数字后缀）
+python merge_json.py --input1 file1.json --input2 file2.json --output merged.json --mode append
+
+# 使用指定的字段作为键（当合并列表时）
+python merge_json.py --input1 file1.json --input2 file2.json --output merged.json --key_field id
+```
+
+## 合并模式说明
+
+- `overwrite`（默认）：当遇到相同的键时，使用第二个文件中的值覆盖第一个文件中的值
+- `keep`：当遇到相同的键时，保留第一个文件中的值，忽略第二个文件中的值
+- `append`：当遇到相同的键时，保留第一个文件中的值，并在第二个文件的键后添加数字后缀（例如 `key_1`）
+
+## 示例
+
+### 合并两个对象（字典）
+
+以下是两个输入文件和不同模式下的输出示例：
+
+file1.json:
+```json
+{
+  "video1": "path/to/video1.mp4",
+  "video2": "path/to/video2.mp4"
+}
+```
+
+file2.json:
+```json
+{
+  "video2": "new/path/to/video2.mp4",
+  "video3": "path/to/video3.mp4"
+}
+```
+
+合并后（overwrite模式）:
+```json
+{
+  "video1": "path/to/video1.mp4",
+  "video2": "new/path/to/video2.mp4",
+  "video3": "path/to/video3.mp4"
+}
+```
+
+### 合并两个数组（列表）
+
+当合并列表时，需要指定一个键字段来检测重复项：
+
+file1.json:
+```json
+[
+  {"id": "001", "path": "path/to/video1.mp4"},
+  {"id": "002", "path": "path/to/video2.mp4"}
+]
+```
+
+file2.json:
+```json
+[
+  {"id": "002", "path": "new/path/to/video2.mp4"},
+  {"id": "003", "path": "path/to/video3.mp4"}
+]
+```
+
+合并后（使用 `--key_field id --mode overwrite`）：
+```json
+[
+  {"id": "001", "path": "path/to/video1.mp4"},
+  {"id": "002", "path": "new/path/to/video2.mp4"},
+  {"id": "003", "path": "path/to/video3.mp4"}
+]
+```
+

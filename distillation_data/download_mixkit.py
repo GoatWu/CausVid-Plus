@@ -26,10 +26,11 @@ def main():
     args = parser.parse_args()
 
     allow_patterns = [f"{args.folder_name}/*.tar"]
-
     snapshot_download(
         repo_id=args.repo_id,
         local_dir=args.local_dir,
+        resume_download=True,
+        local_dir_use_symlinks=False,
         revision="main",          # or the branch/tag/commit you want
         allow_patterns=allow_patterns,
         repo_type="dataset"
