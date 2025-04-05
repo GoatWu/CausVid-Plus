@@ -60,11 +60,26 @@ We use the [MixKit Dataset](https://huggingface.co/datasets/LanguageBind/Open-So
 To prepare the dataset, follow these steps. You can also download the final LMDB dataset from [here](https://huggingface.co/tianweiy/CausVid/tree/main/mixkit_latents_lmdb)
 
 ```bash
+# download the annotation files
+huggingface-cli download LanguageBind/Open-Sora-Plan-v1.1.0 --repo-type dataset --include anno_jsons/video_mixkit_65f_54735.json --local-dir ./sample_dataset
+
+huggingface-cli download LanguageBind/Open-Sora-Plan-v1.1.0 --repo-type dataset --include anno_jsons/video_mixkit_513f_1997.json --local-dir ./sample_dataset
+
 # download and extract video from the Mixkit dataset 
-python distillation_data/download_mixkit.py  --local_dir XXX 
+python distillation_data/download_mixkit.py --local_dir ./datasets
+
+# move all the video into a single folder
+python distillation_data/move_mixkit.py ./datasets/videos
+
+# slice the videos via the annotation files
+python distillation_data/slice_video.py --input_folder ./datasets/videos/ --output_folder ./datasets/sliced_videos/65f/ --anno_json ./sample_dataset/video_mixkit_65f_54735.json --output_json ./sample_dataset/cap_to_video_65f.json
+
+python distillation_data/slice_video.py --input_folder ./datasets/videos/ --output_folder ./datasets/sliced_videos/513f/ --anno_json ./sample_dataset/video_mixkit_513f_1997.json --output_json ./sample_dataset/cap_to_video_513f.json
 
 # convert the video to 480x832x81 
-python distillation_data/process_mixkit.py --input_dir XXX  --output_dir XXX --width 832   --height 480  --fps 16 
+python distillation_data/process_mixkit.py --input_dir ./datasets/sliced_videos/65f/ --output_dir ./datasets/converted_videos/65f/ --width 832 --height 480 --fps 16
+
+python distillation_data/process_mixkit.py --input_dir ./datasets/sliced_videos/513f/ --output_dir ./datasets/converted_videos/513f/ --width 832 --height 480 --fps 16
 
 # precompute the vae latent 
 torchrun --nproc_per_node 8 distillation_data/compute_vae_latent.py --input_video_folder XXX  --output_latent_folder XXX   --info_path sample_dataset/video_mixkit_6484_caption.json

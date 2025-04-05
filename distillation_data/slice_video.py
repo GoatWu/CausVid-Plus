@@ -4,33 +4,175 @@ import argparse
 import cv2
 from tqdm import tqdm
 import subprocess
+import sys
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Process videos based on annotation json')
     parser.add_argument('--input_folder', type=str, required=True, help='Folder containing input videos')
     parser.add_argument('--output_folder', type=str, required=True, help='Folder to save processed videos')
     parser.add_argument('--anno_json', type=str, required=True, help='Path to annotation json file')
+    parser.add_argument('--output_json', type=str, default='cap_to_video.json', help='Name of the output json file')
     return parser.parse_args()
+
+def is_ffmpeg_available():
+    """Check if ffmpeg is available on the system"""
+    try:
+        subprocess.run(["ffmpeg", "-version"], 
+                      stdout=subprocess.PIPE, 
+                      stderr=subprocess.PIPE,
+                      check=False)
+        return True
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return False
+
+def cut_video_ffmpeg(input_path, output_path, start_frame, end_frame, fps):
+    """Slice video using ffmpeg with [start_frame, end_frame) range"""
+    try:
+        # Calculate start and end times in seconds (end_frame is exclusive)
+        start_time = start_frame / fps
+        duration = (end_frame - start_frame) / fps
+        
+        # Use -ss before -i for accurate seeking
+        cmd = [
+            "ffmpeg", "-y",
+            "-ss", str(start_time),
+            "-i", input_path,
+            "-t", str(duration),
+            "-c:v", "libx264",
+            "-preset", "medium", 
+            "-crf", "23",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
+            "-loglevel", "error",
+            output_path
+        ]
+        
+        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        
+        if result.returncode == 0:
+            # Verify the output file
+            verify_cap = cv2.VideoCapture(output_path)
+            if not verify_cap.isOpened():
+                return False
+            verify_cap.release()
+            return True
+        else:
+            error = result.stderr.decode()
+            if error:
+                tqdm.write(f"FFmpeg error: {error[:100]}...")
+            return False
+    except Exception as e:
+        tqdm.write(f"Error using ffmpeg: {str(e)}")
+        return False
+
+def process_video_segments(input_path, output_folder, segments):
+    """Process multiple segments from the same video file using ffmpeg"""
+    # Check if input video exists
+    if not os.path.exists(input_path):
+        tqdm.write(f"Error: Input video not found: {input_path}")
+        return {}
+
+    # Extract base name for output files
+    video_name = os.path.basename(input_path)
+    base_name = os.path.splitext(video_name)[0]
+    
+    # Get video properties using FFmpeg
+    cmd = [
+        "ffprobe", 
+        "-v", "error", 
+        "-select_streams", "v:0", 
+        "-show_entries", "stream=r_frame_rate,nb_frames", 
+        "-of", "csv=p=0", 
+        input_path
+    ]
+    
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        fps_str, frames_str = result.stdout.strip().split(',')
+        
+        # Parse FPS (which may be in form "30000/1001")
+        if '/' in fps_str:
+            num, den = map(int, fps_str.split('/'))
+            fps = num / den
+        else:
+            fps = float(fps_str)
+        
+        total_frames = int(frames_str) if frames_str else 0
+        
+        # If couldn't get frames, use cv2 as fallback just for counting frames
+        if total_frames <= 0:
+            cap = cv2.VideoCapture(input_path)
+            if not cap.isOpened():
+                tqdm.write(f"Error: Cannot open video: {input_path}")
+                return {}
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if fps <= 0:
+                fps = cap.get(cv2.CAP_PROP_FPS)
+            cap.release()
+    except Exception as e:
+        # Fallback to OpenCV for just getting video properties
+        tqdm.write(f"Warning: FFprobe failed, using OpenCV to get video properties: {str(e)}")
+        cap = cv2.VideoCapture(input_path)
+        if not cap.isOpened():
+            tqdm.write(f"Error: Cannot open video: {input_path}")
+            return {}
+        
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        cap.release()
+    
+    # Results mapping
+    results = {}
+    
+    # Process each segment with FFmpeg
+    for segment in tqdm(segments, desc=f"Processing segments", leave=False):
+        # Get frame range [start_frame, end_frame)
+        frame_idx = segment['frame_idx']
+        start_frame, end_frame = map(int, frame_idx.split(':'))
+        
+        # Validate frame range
+        if start_frame >= total_frames:
+            tqdm.write(f"Error: Start frame {start_frame} exceeds total frames {total_frames}")
+            continue
+        
+        if end_frame > total_frames:
+            tqdm.write(f"Warning: End frame {end_frame} exceeds total frames {total_frames}, clamping to {total_frames}")
+            end_frame = total_frames
+        
+        # Generate output path
+        output_name = f"{base_name}_{start_frame}_{end_frame}.mp4"
+        output_path = os.path.join(output_folder, output_name)
+        
+        # Skip if already exists
+        if os.path.exists(output_path):
+            results[segment['cap']] = output_name
+            continue
+        
+        # Process with FFmpeg
+        if cut_video_ffmpeg(input_path, output_path, start_frame, end_frame, fps):
+            results[segment['cap']] = output_name
+    
+    return results
 
 def main():
     args = parse_args()
     
-    # Create output folder (if it doesn't exist)
+    # Verify FFmpeg is available
+    if not is_ffmpeg_available():
+        print("Error: FFmpeg is required but not found in the system. Please install FFmpeg and try again.")
+        sys.exit(1)
+    
+    # Create output folder
     os.makedirs(args.output_folder, exist_ok=True)
     
-    # Read anno_json file
+    # Read annotations
     with open(args.anno_json, 'r', encoding='utf-8') as f:
         annotations = json.load(f)
     
-    # Dictionary to store caption to video filename mapping
+    # Caption to video mapping
     cap_to_video = {}
     
-    # Check if ffmpeg is available
-    ffmpeg_available = is_ffmpeg_available()
-    if not ffmpeg_available:
-        print("Warning: ffmpeg not found, will use OpenCV for video processing")
-    
-    # Group annotations by original video to process each video only once
+    # Group annotations by original video
     video_segments = {}
     for annotation in annotations:
         full_path = annotation['path']
@@ -39,210 +181,64 @@ def main():
             video_segments[video_name] = []
         video_segments[video_name].append(annotation)
     
-    # Process each video with all its segments
-    print(f"Processing {len(video_segments)} original videos")
+    print(f"Processing {len(video_segments)} videos")
     
-    # Create the main progress bar for processing videos
+    # Process each video
+    stats = {"processed": 0, "skipped": 0, "failed": 0}
+    
     with tqdm(total=len(video_segments), desc="Processing videos") as pbar:
-        # Counter for processed and skipped segments
-        processed_count = 0
-        skipped_count = 0
-        
         for video_name, segments in video_segments.items():
             input_video_path = os.path.join(args.input_folder, video_name)
             
-            # Process all segments of this video
-            for annotation in segments:
-                # Get frame range
-                frame_idx = annotation['frame_idx']
-                start_frame, end_frame = map(int, frame_idx.split(':'))
-                
-                # Update progress bar description
-                pbar.set_description(f"Video: {video_name[:20]}... Frame: {start_frame}-{end_frame}")
-                
-                # Generate output video filename, ensure mp4 extension
-                output_video_name = f"{os.path.splitext(video_name)[0]}_{start_frame}_{end_frame}.mp4"
-                output_video_path = os.path.join(args.output_folder, output_video_name)
-                
-                # Check if the video segment already exists in the output folder
-                if not os.path.exists(output_video_path):
-                    # Process the video
-                    if ffmpeg_available:
-                        success = cut_video_ffmpeg(input_video_path, output_video_path, start_frame, end_frame)
-                        if not success:
-                            tqdm.write(f"Failed with ffmpeg, using OpenCV for {video_name} ({start_frame}:{end_frame})")
-                            cut_video_opencv(input_video_path, output_video_path, start_frame, end_frame)
-                    else:
-                        cut_video_opencv(input_video_path, output_video_path, start_frame, end_frame)
-                    
-                    processed_count += 1
-                else:
-                    skipped_count += 1
-                
-                # Update mapping
-                cap_to_video[annotation['cap']] = output_video_name
+            # Process all segments of this video at once
+            pbar.set_description(f"Video: {video_name[:20]} ({len(segments)} segments)")
             
-            # Update the progress bar after processing all segments of this video
+            # Check for pre-existing segments
+            pre_existing = 0
+            for segment in segments:
+                frame_idx = segment['frame_idx']
+                start_frame, end_frame = map(int, frame_idx.split(':'))
+                output_name = f"{os.path.splitext(video_name)[0]}_{start_frame}_{end_frame}.mp4"
+                output_path = os.path.join(args.output_folder, output_name)
+                
+                if os.path.exists(output_path):
+                    cap_to_video[segment['cap']] = output_name
+                    pre_existing += 1
+            
+            # Skip processing if all segments already exist
+            if pre_existing == len(segments):
+                stats["skipped"] += len(segments)
+                pbar.update(1)
+                continue
+            
+            # Process remaining segments
+            segment_results = process_video_segments(
+                input_video_path, 
+                args.output_folder, 
+                [s for s in segments if s['cap'] not in cap_to_video]
+            )
+            
+            # Update mappings and stats
+            for cap, video_file in segment_results.items():
+                cap_to_video[cap] = video_file
+                stats["processed"] += 1
+            
+            # Count failed segments
+            failed = len(segments) - pre_existing - len(segment_results)
+            stats["skipped"] += pre_existing
+            stats["failed"] += failed
+            
+            # Update progress
             pbar.update(1)
     
-    # Final statistics
-    print(f"Processed {processed_count} segments, skipped {skipped_count} existing segments")
-    
-    # Save caption to video filename mapping as json file in the current directory
-    output_json_path = "cap_to_video.json"
+    # Save caption to video mapping
+    output_json_path = args.output_json
     with open(output_json_path, 'w', encoding='utf-8') as f:
         json.dump(cap_to_video, f, ensure_ascii=False, indent=2)
     
-    print(f"Processing complete. The mapping file has been saved to: {output_json_path}")
-
-def is_ffmpeg_available():
-    """Check if ffmpeg is available on the system"""
-    try:
-        subprocess.run(
-            ["ffmpeg", "-version"], 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE,
-            check=False
-        )
-        return True
-    except (subprocess.SubprocessError, FileNotFoundError):
-        return False
-
-def cut_video_ffmpeg(input_path, output_path, start_frame, end_frame):
-    """Slice video using ffmpeg to ensure compatibility with PyAV"""
-    try:
-        # Get the FPS of the input video
-        cap = cv2.VideoCapture(input_path)
-        if not cap.isOpened():
-            tqdm.write(f"Error: Unable to open video {input_path}")
-            import time
-            time.sleep(10)
-            return False
-        
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        cap.release()
-        
-        # Calculate start and end times in seconds
-        start_time = start_frame / fps
-        duration = (end_frame - start_frame) / fps
-        
-        # First try using direct stream copy for best performance and quality
-        cmd = [
-            "ffmpeg", "-y",
-            "-ss", str(start_time),
-            "-i", input_path,
-            "-t", str(duration),
-            "-c:v", "copy",  # Copy video codec
-            "-c:a", "copy",  # Copy audio codec if any
-            "-avoid_negative_ts", "1",
-            "-loglevel", "error",  # Reduce ffmpeg output
-            output_path
-        ]
-        
-        result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
-        # If direct copy fails, use encoding with h264 (most compatible with PyAV)
-        if result.returncode != 0:
-            cmd = [
-                "ffmpeg", "-y",
-                "-ss", str(start_time),
-                "-i", input_path,
-                "-t", str(duration),
-                "-c:v", "libx264",  # Use H.264 codec for compatibility
-                "-preset", "medium", 
-                "-crf", "23",       # Reasonable quality
-                "-pix_fmt", "yuv420p",  # Widely supported pixel format
-                "-movflags", "+faststart",  # Optimize for web streaming
-                "-loglevel", "error",  # Reduce ffmpeg output
-                output_path
-            ]
-            
-            result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        
-        if result.returncode == 0:
-            # Verify the output file can be opened with OpenCV (as a proxy for PyAV compatibility)
-            verify_cap = cv2.VideoCapture(output_path)
-            if verify_cap.isOpened():
-                verify_cap.release()
-                return True
-            else:
-                tqdm.write(f"Warning: Created file cannot be opened with OpenCV")
-                return False
-        else:
-            error = result.stderr.decode()
-            if error:
-                tqdm.write(f"FFmpeg error: {error[:100]}...")
-            return False
-            
-    except Exception as e:
-        tqdm.write(f"Error using ffmpeg: {str(e)}")
-        return False
-
-def cut_video_opencv(input_path, output_path, start_frame, end_frame):
-    """Slice video according to frame indices using OpenCV"""
-    # Open video file
-    cap = cv2.VideoCapture(input_path)
-    if not cap.isOpened():
-        tqdm.write(f"Error: Unable to open video {input_path}")
-        return
-    
-    # Get video properties
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    
-    # Use mp4v codec for compatibility
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
-    
-    if not out.isOpened():
-        tqdm.write("Failed to create video writer.")
-        return
-    
-    # Jump to the start frame
-    cap.set(cv2.CAP_PROP_POS_FRAMES, start_frame)
-    
-    # Calculate total frames to process
-    total_frames = end_frame - start_frame
-    
-    # Read and write the specified range of frames
-    frame_count = 0
-    while cap.isOpened() and frame_count < total_frames:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        out.write(frame)
-        frame_count += 1
-    
-    # Release resources
-    cap.release()
-    out.release()
-    
-    # If OpenCV method is used, convert the output to h264 for better compatibility with PyAV
-    if is_ffmpeg_available():
-        temp_path = output_path + ".temp.mp4"
-        os.rename(output_path, temp_path)
-        
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", temp_path,
-            "-c:v", "libx264",
-            "-preset", "medium",
-            "-crf", "23",
-            "-pix_fmt", "yuv420p",
-            "-movflags", "+faststart",
-            "-loglevel", "error",  # Reduce ffmpeg output
-            output_path
-        ]
-        
-        try:
-            subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            os.remove(temp_path)
-        except:
-            # If conversion fails, revert to original file
-            tqdm.write("Conversion failed, keeping original OpenCV output")
-            os.rename(temp_path, output_path)
+    # Print statistics
+    print(f"Processed: {stats['processed']}, Skipped: {stats['skipped']}, Failed: {stats['failed']}")
+    print(f"Processing complete. Mapping saved to: {output_json_path}")
 
 if __name__ == "__main__":
     main()
