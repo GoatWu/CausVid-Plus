@@ -82,10 +82,10 @@ python distillation_data/process_mixkit.py --input_dir ./datasets/sliced_videos/
 python distillation_data/process_mixkit.py --input_dir ./datasets/sliced_videos/513f/ --output_dir ./datasets/converted_videos/513f/ --width 832 --height 480 --fps 16
 
 # precompute the vae latent 
-torchrun --nproc_per_node 8 distillation_data/compute_vae_latent.py --input_video_folder XXX  --output_latent_folder XXX   --info_path sample_dataset/video_mixkit_6484_caption.json
+torchrun --nproc_per_node 8 distillation_data/compute_vae_latent.py --input_video_folder ./datasets/onverted_videos/65f/ --output_latent_folder ./datasets/latents/65f --info_path ./sample_dataset/cap_to_video_65f.json
 
 # combined everything into a lmdb dataset 
-python causvid/ode_data/create_lmdb_iterative.py   --data_path XXX  --lmdb_path XXX
+python causvid/ode_data/create_lmdb_iterative.py --data_path ./datasets/latents/65f/ --lmdb_path ./datasets/mixkit_ode_lmdb/65f/
 ```
 
 ## Training 
