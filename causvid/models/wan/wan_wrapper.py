@@ -14,7 +14,7 @@ import torch
 
 
 class WanTextEncoder(TextEncoderInterface):
-    def __init__(self) -> None:
+    def __init__(self, model_name="T2V-1.3B") -> None:
         super().__init__()
 
         self.text_encoder = umt5_xxl(
@@ -24,12 +24,12 @@ class WanTextEncoder(TextEncoderInterface):
             device=torch.device('cpu')
         ).eval().requires_grad_(False)
         self.text_encoder.load_state_dict(
-            torch.load("wan_models/Wan2.1-T2V-1.3B/models_t5_umt5-xxl-enc-bf16.pth",
+            torch.load(f"wan_models/Wan2.1-{model_name}/models_t5_umt5-xxl-enc-bf16.pth",
                        map_location='cpu', weights_only=False)
         )
 
         self.tokenizer = HuggingfaceTokenizer(
-            name="wan_models/Wan2.1-T2V-1.3B/google/umt5-xxl/", seq_len=512, clean='whitespace')
+            name=f"wan_models/Wan2.1-{model_name}/google/umt5-xxl/", seq_len=512, clean='whitespace')
 
     @property
     def device(self):
@@ -52,7 +52,7 @@ class WanTextEncoder(TextEncoderInterface):
 
 
 class WanVAEWrapper(VAEInterface):
-    def __init__(self):
+    def __init__(self, model_name="T2V-1.3B"):
         super().__init__()
         mean = [
             -0.7571, -0.7089, -0.9113, 0.1075, -0.1745, 0.9653, -0.1517, 1.5508,
@@ -67,7 +67,7 @@ class WanVAEWrapper(VAEInterface):
 
         # init model
         self.model = _video_vae(
-            pretrained_path="wan_models/Wan2.1-T2V-1.3B/Wan2.1_VAE.pth",
+            pretrained_path=f"wan_models/Wan2.1-{model_name}/Wan2.1_VAE.pth",
             z_dim=16,
         ).eval().requires_grad_(False)
 
@@ -93,10 +93,10 @@ class WanVAEWrapper(VAEInterface):
 
 
 class WanDiffusionWrapper(DiffusionModelInterface):
-    def __init__(self):
+    def __init__(self, model_name="T2V-1.3B"):
         super().__init__()
 
-        self.model = WanModel.from_pretrained("wan_models/Wan2.1-T2V-1.3B/")
+        self.model = WanModel.from_pretrained(f"wan_models/Wan2.1-{model_name}/")
         self.model.eval()
 
         self.uniform_timestep = True
@@ -203,11 +203,11 @@ class WanDiffusionWrapper(DiffusionModelInterface):
 
 
 class CausalWanDiffusionWrapper(WanDiffusionWrapper):
-    def __init__(self):
+    def __init__(self, model_name="T2V-1.3B"):
         super().__init__()
 
         self.model = CausalWanModel.from_pretrained(
-            "wan_models/Wan2.1-T2V-1.3B/")
+            f"wan_models/Wan2.1-{model_name}/")
         self.model.eval()
 
         self.uniform_timestep = False
