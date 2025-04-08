@@ -81,7 +81,7 @@ python distillation_data/process_mixkit.py --input_dir ./datasets/sliced_videos/
 torchrun --nproc_per_node 8 distillation_data/compute_vae_latent.py --input_video_folder ./datasets/onverted_videos/65f/ --output_latent_folder ./datasets/latents/65f --info_path ./sample_dataset/cap_to_video_65f.json
 
 # combined everything into a lmdb dataset 
-python causvid/ode_data/create_lmdb_iterative.py --data_path ./datasets/latents/65f/ --lmdb_path ./datasets/mixkit_ode_lmdb/65f/
+python causvid/ode_data/create_lmdb_iterative.py --data_path ./datasets/latents/65f/ --lmdb_path ./datasets/mixkit_latent_lmdb/65f/
 
 # precompute the ode pairs
 # contain step distillation here
@@ -92,9 +92,12 @@ torchrun --nnodes 8 --nproc_per_node=8 \
 causvid/models/wan/generate_ode_pairs.py \
 --output_folder ./datasets/odes/65f/ \
 --caption_path ./sample_dataset/mixkit_prompts_65f.txt \
---model_name T2V-14B \
+--model_type T2V-14B \
 --config ./configs/wan_causal_ode.yaml \
 --fsdp
+
+# combined everything into a lmdb dataset 
+python causvid/ode_data/create_lmdb_iterative.py --data_path ./datasets/odes/65f/ --lmdb_path ./datasets/mixkit_odes_lmdb/65f/
 
 ```
 
@@ -122,10 +125,12 @@ python causvid/ode_data/create_lmdb_iterative.py  --data_path XXX --lmdb_path XX
 Causal ODE Pretraining. You can also skip this step and download the ode finetuned checkpoint from [here](https://huggingface.co/tianweiy/CausVid/tree/main/wan_causal_ode_checkpoint_model_003000) 
 
 ```bash
-torchrun --nnodes 8 --nproc_per_node=8 --rdzv_id=5235 \
-    --rdzv_backend=c10d \
-    --rdzv_endpoint $MASTER_ADDR causvid/train_ode.py \
-    --config_path  configs/wan_causal_ode.yaml  --no_visualize
+torchrun --nnodes 8 --nproc_per_node=8 \
+--rdzv_id=5235 \
+--rdzv_backend=c10d \
+--rdzv_endpoint=${MASTER_ADDR}:${MASTER_PORT} \
+causvid/train_ode.py \
+--config_path configs/wan_causal_ode.yaml
 ```
 
 Causal DMD Training.   
