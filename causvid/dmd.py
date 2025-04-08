@@ -13,7 +13,7 @@ import torch
 
 
 class DMD(nn.Module):
-    def __init__(self, args, device, model_name="T2V-1.3B", num_frames = 17):
+    def __init__(self, args, device, model_type="T2V-1.3B", num_frames = 17):
         """
         Initialize the DMD (Distribution Matching Distillation) module.
         This class is self-contained and compute generator and fake score losses
@@ -36,7 +36,7 @@ class DMD(nn.Module):
             args, "fake_task_type", args.generator_task)
 
         self.generator = get_diffusion_wrapper(
-            model_name=self.generator_model_name)(model_name=model_name, num_frames=num_frames)
+            model_name=self.generator_model_name)(model_type=model_type, num_frames=num_frames)
         self.generator.set_module_grad(
             module_grad=args.generator_grad
         )
@@ -55,13 +55,13 @@ class DMD(nn.Module):
             self.generator.model.num_frame_per_block = self.num_frame_per_block
 
         self.real_score = get_diffusion_wrapper(
-            model_name=self.real_model_name)(model_name=model_name, num_frames=num_frames)
+            model_name=self.real_model_name)(model_type=model_type, num_frames=num_frames)
         self.real_score.set_module_grad(
             module_grad=args.real_score_grad
         )
 
         self.fake_score = get_diffusion_wrapper(
-            model_name=self.fake_model_name)(model_name=model_name, num_frames=num_frames)
+            model_name=self.fake_model_name)(model_type=model_type, num_frames=num_frames)
         self.fake_score.set_module_grad(
             module_grad=args.fake_score_grad
         )
@@ -71,10 +71,10 @@ class DMD(nn.Module):
             self.fake_score.enable_gradient_checkpointing()
 
         self.text_encoder = get_text_encoder_wrapper(
-            model_name=args.model_name)(model_name=model_name)
+            model_name=args.model_name)(model_type=model_type)
         self.text_encoder.requires_grad_(False)
 
-        self.vae = get_vae_wrapper(model_name=args.model_name)(model_name=model_name)
+        self.vae = get_vae_wrapper(model_name=args.model_name)(model_type=model_type)
         self.vae.requires_grad_(False)
 
         # this will be init later with fsdp-wrapped modules

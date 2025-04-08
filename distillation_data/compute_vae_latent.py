@@ -41,7 +41,7 @@ def main():
                         help="Path to the folder containing input videos.")
     parser.add_argument("--output_latent_folder", type=str,
                         help="Path to the folder where output latents will be saved.")
-    parser.add_argument("--model_name", type=str, default="T2V-1.3B",
+    parser.add_argument("--model_type", type=str, default="T2V-1.3B",
                         help="Name of the model to use.")
     parser.add_argument("--info_path", type=str,
                         help="Path to the info file containing video metadata.")
@@ -61,7 +61,7 @@ def main():
     with open(args.info_path, "r") as f:
         prompt_info = json.load(f)
 
-    model = WanVAEWrapper(model_name=args.model_name).to(device=device, dtype=torch.bfloat16)
+    model = WanVAEWrapper(model_type=args.model_type).to(device=device, dtype=torch.bfloat16)
     os.makedirs(args.output_latent_folder, exist_ok=True)
 
     # Dictionary to store video_path:latent_file_path mapping

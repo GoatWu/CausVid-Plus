@@ -8,16 +8,16 @@ import torch
 
 
 class InferencePipeline(torch.nn.Module):
-    def __init__(self, args, device, model_name="T2V-1.3B", num_frames = 17):
+    def __init__(self, args, device, model_type="T2V-1.3B", num_frames = 17):
         super().__init__()
         # Step 1: Initialize all models
         self.generator_model_name = getattr(
             args, "generator_name", args.model_name)
         self.generator = get_diffusion_wrapper(
-            model_name=self.generator_model_name)(model_name=model_name, num_frames=num_frames)
+            model_name=self.generator_model_name)(model_type=model_type, num_frames=num_frames)
         self.text_encoder = get_text_encoder_wrapper(
-            model_name=args.model_name)(model_name=model_name)
-        self.vae = get_vae_wrapper(model_name=args.model_name)(model_name=model_name)
+            model_name=args.model_name)(model_type=model_type)
+        self.vae = get_vae_wrapper(model_name=args.model_name)(model_type=model_type)
 
         # Step 2: Initialize all causal hyperparmeters
         self.denoising_step_list = torch.tensor(
@@ -28,14 +28,14 @@ class InferencePipeline(torch.nn.Module):
 
         self.scheduler = self.generator.get_scheduler()
 
-        if model_name == "T2V-1.3B":
+        if model_type == "T2V-1.3B":
             self.num_transformer_blocks = 30
             self.num_heads = 12
-        elif model_name == "T2V-14B":
+        elif model_type == "T2V-14B":
             self.num_transformer_blocks = 40
             self.num_heads = 40
         else:
-            raise ValueError(f"Model name {model_name} not supported")
+            raise ValueError(f"Model type {model_type} not supported")
 
         self.frame_seq_length = 1560
 

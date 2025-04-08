@@ -6,7 +6,7 @@ import torch
 
 
 class ODERegression(nn.Module):
-    def __init__(self, args, device, model_name="T2V-1.3B", num_frames = 17):
+    def __init__(self, args, device, model_type="T2V-1.3B", num_frames = 17):
         """
         Initialize the ODERegression module.
         This class is self-contained and compute generator losses
@@ -18,7 +18,7 @@ class ODERegression(nn.Module):
 
         # Step 1: Initialize all models
 
-        self.generator = get_diffusion_wrapper(model_name=args.model_name)(model_name=model_name, num_frames=num_frames)
+        self.generator = get_diffusion_wrapper(model_name=args.model_name)(model_type=model_type, num_frames=num_frames)
         self.generator.set_module_grad(
             module_grad=args.generator_grad
         )
@@ -39,10 +39,10 @@ class ODERegression(nn.Module):
             self.generator.enable_gradient_checkpointing()
 
         self.text_encoder = get_text_encoder_wrapper(
-            model_name=args.model_name)()
+            model_name=args.model_name)(model_type=model_type)
         self.text_encoder.requires_grad_(False)
 
-        self.vae = get_vae_wrapper(model_name=args.model_name)()
+        self.vae = get_vae_wrapper(model_name=args.model_name)(model_type=model_type)
         self.vae.requires_grad_(False)
 
         # Step 2: Initialize all hyperparameters

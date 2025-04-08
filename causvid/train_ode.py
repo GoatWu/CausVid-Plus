@@ -48,7 +48,7 @@ class Trainer:
         # Step 2: Initialize the model and optimizer
 
         if config.distillation_loss == "ode":
-            self.distillation_model = ODERegression(config, device=self.device)
+            self.distillation_model = ODERegression(config, device=self.device, model_type=config.model_type, num_frames=config.num_frames)
         else:
             raise ValueError("Invalid distillation loss type")
 

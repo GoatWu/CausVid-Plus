@@ -13,8 +13,9 @@ def main():
 
     keys = list(data.keys())
     
-    with open(args.txt_path, 'w') as f:
+    with open(args.txt_path, 'w', encoding='utf-8') as f:
         for key in keys:
+            key = key.replace('\n', '\\n')
             f.write(f"{key}\n")
     
     print(f"Successfully extracted {len(keys)} keys to {args.txt_path}")
