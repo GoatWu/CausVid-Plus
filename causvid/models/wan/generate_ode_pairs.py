@@ -1,8 +1,10 @@
 from causvid.models.wan.wan_wrapper import WanDiffusionWrapper, WanTextEncoder, WanVAEWrapper
 from causvid.models.wan.flow_match import FlowMatchScheduler
-from causvid.util import launch_distributed_job
+from causvid.models import get_block_class
+from causvid.util import launch_distributed_job, fsdp_wrap
 from causvid.data import TextDataset
 import torch.distributed as dist
+from omegaconf import OmegaConf
 from tqdm import tqdm
 import argparse
 import torch
@@ -10,9 +12,32 @@ import math
 import os
 
 
-def init_model(device):
-    model = WanDiffusionWrapper().to(device).to(torch.float32)
+def init_model(device, model_name="T2V-1.3B", use_fsdp=True, config=None):
+    # Initialize model
+    model = WanDiffusionWrapper(model_name=model_name).to(device).to(torch.float32)
     encoder = WanTextEncoder().to(device).to(torch.float32)
+    
+    # Wrap with FSDP if enabled
+    if use_fsdp and torch.distributed.is_initialized():
+        
+        model = fsdp_wrap(
+            model,
+            sharding_strategy=config.sharding_strategy,
+            mixed_precision=config.mixed_precision,
+            wrap_strategy=config.generator_fsdp_wrap_strategy,
+            transformer_module=(get_block_class(config.generator_fsdp_transformer_module),
+                                ) if config.generator_fsdp_wrap_strategy == "transformer" else None
+        )
+
+        encoder = fsdp_wrap(
+            encoder,
+            sharding_strategy=config.sharding_strategy,
+            mixed_precision=config.mixed_precision,
+            wrap_strategy=config.text_encoder_fsdp_wrap_strategy,
+            transformer_module=(get_block_class(config.text_encoder_fsdp_transformer_module),
+                                ) if config.text_encoder_fsdp_wrap_strategy == "transformer" else None
+        )
+    
     model.set_module_grad(
         {
             "model": False
@@ -39,9 +64,24 @@ def main():
     parser.add_argument("--output_folder", type=str)
     parser.add_argument("--caption_path", type=str)
     parser.add_argument("--guidance_scale", type=float, default=6.0)
-
+    parser.add_argument("--model_name", type=str, default="T2V-1.3B")
+    parser.add_argument("--config", type=str, help="Path to config file ")
+    parser.add_argument("--fsdp", action="store_true", help="Enable FSDP to save GPU memory")
     args = parser.parse_args()
 
+    # Load FSDP config if provided
+    config = None
+    if args.fsdp:
+        if args.config:
+            config = OmegaConf.load(args.config)
+        if args.local_rank == 0:
+            print("FSDP Configuration:")
+            if config:
+                print(OmegaConf.to_yaml(config))
+            else:
+                print("Using default FSDP configuration")
+
+    # Initialize distributed environment
     launch_distributed_job()
     global_rank = dist.get_rank()
 
@@ -51,7 +91,12 @@ def main():
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
-    model, encoder, scheduler, unconditional_dict = init_model(device=device)
+    model, encoder, scheduler, unconditional_dict = init_model(
+        device=device, 
+        model_name=args.model_name,
+        use_fsdp=args.fsdp,
+        config=config
+    )
 
     dataset = TextDataset(args.caption_path)
 
@@ -69,14 +114,14 @@ def main():
         )
 
         latents = torch.randn(
-            [1, 21, 16, 60, 104], dtype=torch.float32, device=device
+            [1, config.num_frames, 16, 60, 104], dtype=torch.float32, device=device
         )
 
         noisy_input = []
 
         for progress_id, t in enumerate(tqdm(scheduler.timesteps)):
             timestep = t * \
-                torch.ones([1, 21], device=device, dtype=torch.float32)
+                torch.ones([1, config.num_frames], device=device, dtype=torch.float32)
 
             noisy_input.append(latents)
 
@@ -102,7 +147,7 @@ def main():
             latents = scheduler.step(
                 flow_pred.flatten(0, 1),
                 scheduler.timesteps[progress_id] * torch.ones(
-                    [1, 21], device=device, dtype=torch.long).flatten(0, 1),
+                    [1, config.num_frames], device=device, dtype=torch.long).flatten(0, 1),
                 latents.flatten(0, 1)
             ).unflatten(dim=0, sizes=flow_pred.shape[:2])
 

@@ -74,18 +74,28 @@ python distillation_data/move_mixkit.py ./datasets/videos
 # slice the videos via the annotation files
 python distillation_data/slice_video.py --input_folder ./datasets/videos/ --output_folder ./datasets/sliced_videos/65f/ --anno_json ./sample_dataset/video_mixkit_65f_54735.json --output_json ./sample_dataset/cap_to_video_65f.json
 
-python distillation_data/slice_video.py --input_folder ./datasets/videos/ --output_folder ./datasets/sliced_videos/513f/ --anno_json ./sample_dataset/video_mixkit_513f_1997.json --output_json ./sample_dataset/cap_to_video_513f.json
-
 # convert the video to 480x832x81 
 python distillation_data/process_mixkit.py --input_dir ./datasets/sliced_videos/65f/ --output_dir ./datasets/converted_videos/65f/ --width 832 --height 480 --fps 16
-
-python distillation_data/process_mixkit.py --input_dir ./datasets/sliced_videos/513f/ --output_dir ./datasets/converted_videos/513f/ --width 832 --height 480 --fps 16
 
 # precompute the vae latent 
 torchrun --nproc_per_node 8 distillation_data/compute_vae_latent.py --input_video_folder ./datasets/onverted_videos/65f/ --output_latent_folder ./datasets/latents/65f --info_path ./sample_dataset/cap_to_video_65f.json
 
 # combined everything into a lmdb dataset 
 python causvid/ode_data/create_lmdb_iterative.py --data_path ./datasets/latents/65f/ --lmdb_path ./datasets/mixkit_ode_lmdb/65f/
+
+# precompute the ode pairs
+# contain step distillation here
+torchrun --nnodes 8 --nproc_per_node=8 \
+--rdzv_id=5235 \
+--rdzv_backend=c10d \
+--rdzv_endpoint=${MASTER_ADDR}:${MASTER_PORT} \
+causvid/models/wan/generate_ode_pairs.py \
+--output_folder ./datasets/odes/65f/ \
+--caption_path ./sample_dataset/mixkit_prompts_65f.txt \
+--model_name T2V-14B \
+--config ./configs/wan_causal_ode.yaml \
+--fsdp
+
 ```
 
 ## Training 
