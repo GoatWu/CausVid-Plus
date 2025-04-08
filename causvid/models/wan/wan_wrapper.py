@@ -93,7 +93,7 @@ class WanVAEWrapper(VAEInterface):
 
 
 class WanDiffusionWrapper(DiffusionModelInterface):
-    def __init__(self, model_name="T2V-1.3B"):
+    def __init__(self, model_name="T2V-1.3B", num_frames = 17):
         super().__init__()
 
         self.model = WanModel.from_pretrained(f"wan_models/Wan2.1-{model_name}/")
@@ -106,7 +106,8 @@ class WanDiffusionWrapper(DiffusionModelInterface):
         )
         self.scheduler.set_timesteps(1000, training=True)
 
-        self.seq_len = 32760  # [1, 21, 16, 60, 104]
+        # self.seq_len = 32760  # [1, 21, 16, 60, 104]
+        self.seq_len = num_frames * 1560
         super().post_init()
 
     def enable_gradient_checkpointing(self) -> None:

@@ -32,7 +32,7 @@ pipeline.generator.load_state_dict(
 dataset = TextDataset(args.prompt_file_path)
 
 sampled_noise = torch.randn(
-    [1, 21, 16, 60, 104], device="cuda", dtype=torch.bfloat16
+    [1, config.num_frames, 16, 60, 104], device="cuda", dtype=torch.bfloat16
 )
 
 os.makedirs(args.output_folder, exist_ok=True)

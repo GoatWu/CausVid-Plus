@@ -8,13 +8,13 @@ import torch
 
 
 class InferencePipeline(torch.nn.Module):
-    def __init__(self, args, device, model_name="T2V-1.3B"):
+    def __init__(self, args, device, model_name="T2V-1.3B", num_frames = 17):
         super().__init__()
         # Step 1: Initialize all models
         self.generator_model_name = getattr(
             args, "generator_name", args.model_name)
         self.generator = get_diffusion_wrapper(
-            model_name=self.generator_model_name)(model_name=model_name)
+            model_name=self.generator_model_name)(model_name=model_name, num_frames=num_frames)
         self.text_encoder = get_text_encoder_wrapper(
             model_name=args.model_name)(model_name=model_name)
         self.vae = get_vae_wrapper(model_name=args.model_name)(model_name=model_name)

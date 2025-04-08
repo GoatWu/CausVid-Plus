@@ -6,7 +6,7 @@ import torch
 
 
 class ODERegression(nn.Module):
-    def __init__(self, args, device):
+    def __init__(self, args, device, model_name="T2V-1.3B", num_frames = 17):
         """
         Initialize the ODERegression module.
         This class is self-contained and compute generator losses
@@ -18,7 +18,7 @@ class ODERegression(nn.Module):
 
         # Step 1: Initialize all models
 
-        self.generator = get_diffusion_wrapper(model_name=args.model_name)()
+        self.generator = get_diffusion_wrapper(model_name=args.model_name)(model_name=model_name, num_frames=num_frames)
         self.generator.set_module_grad(
             module_grad=args.generator_grad
         )

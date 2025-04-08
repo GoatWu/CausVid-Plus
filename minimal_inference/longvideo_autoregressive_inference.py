@@ -60,7 +60,7 @@ for prompt_index in tqdm(range(len(dataset))):
 
     for rollout_index in range(num_rollout):
         sampled_noise = torch.randn(
-            [1, 21, 16, 60, 104], device="cuda", dtype=torch.bfloat16
+            [1, config.num_frames, 16, 60, 104], device="cuda", dtype=torch.bfloat16
         )
 
         video, latents = pipeline.inference(

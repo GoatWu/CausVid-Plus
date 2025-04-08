@@ -40,7 +40,7 @@ for index in tqdm(range(len(dataset))):
     prompt = dataset[index]
     video = pipe.inference(
         noise=torch.randn(
-            1, 21, 16, 60, 104, generator=torch.Generator(device="cuda").manual_seed(42),
+            1, config.num_frames, 16, 60, 104, generator=torch.Generator(device="cuda").manual_seed(42),
             dtype=torch.bfloat16, device="cuda"
         ),
         text_prompts=[prompt]
