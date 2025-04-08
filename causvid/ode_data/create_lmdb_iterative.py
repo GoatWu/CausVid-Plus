@@ -31,13 +31,13 @@ def get_array_shape_from_lmdb(env, array_name):
     return image_shape
 
 
-def process_data_dict(data_dict, seen_prompts):
+def process_data_dict(data_dict, seen_prompts, skip_count):
     output_dict = {}
 
     all_videos = []
     all_prompts = []
     for prompt, video in data_dict.items():
-        if prompt in seen_prompts:
+        if prompt in seen_prompts or len(prompt) < 5:
             continue
         else:
             seen_prompts.add(prompt)
@@ -47,13 +47,14 @@ def process_data_dict(data_dict, seen_prompts):
         all_prompts.append(prompt)
 
     if len(all_videos) == 0:
-        return {"latents": np.array([]), "prompts": np.array([])}
+        skip_count += 1
+        return None, skip_count
 
     all_videos = np.concatenate(all_videos, axis=0)
     output_dict['latents'] = all_videos
     output_dict['prompts'] = np.array(all_prompts)
 
-    return output_dict
+    return output_dict, skip_count
 
 
 def retrieve_row_from_lmdb(lmdb_env, array_name, dtype, row_index, shape=None):
@@ -100,12 +101,16 @@ def main():
 
     seen_prompts = set()  # for deduplication
 
+    skip_count = 0
     for index, file in tqdm(enumerate(all_files)):
         # read from disk
-        data_dict = torch.load(file)
+        data_dict_file = torch.load(file)
 
-        data_dict = process_data_dict(data_dict, seen_prompts)
-
+        data_dict_file, skip_count = process_data_dict(data_dict_file, seen_prompts, skip_count)
+        if data_dict_file is not None:
+            data_dict = data_dict_file
+        else:
+            continue
         # write to lmdb file
         store_arrays_to_lmdb(env, data_dict, start_index=counter)
         counter += len(data_dict['prompts'])
@@ -113,7 +118,7 @@ def main():
     # save each entry's shape to lmdb
     with env.begin(write=True) as txn:
         for key, val in data_dict.items():
-            print(key, val)
+            print(key, val.shape)
             array_shape = np.array(val.shape)
             array_shape[0] = counter
 
@@ -121,6 +126,8 @@ def main():
             shape_str = " ".join(map(str, array_shape))
             txn.put(shape_key, shape_str.encode())
 
+    print(f"total prompts: {len(all_files)}")
+    print(f"skipped prompts: {skip_count}")
 
 if __name__ == "__main__":
     main()

@@ -12,10 +12,10 @@ import math
 import os
 
 
-def init_model(device, model_name="T2V-1.3B", use_fsdp=True, config=None):
+def init_model(device, model_type="T2V-1.3B", use_fsdp=True, config=None):
     # Initialize model
-    model = WanDiffusionWrapper(model_name=model_name).to(device).to(torch.float32)
-    encoder = WanTextEncoder().to(device).to(torch.float32)
+    model = WanDiffusionWrapper(model_type=model_type).to(device).to(torch.float32)
+    encoder = WanTextEncoder(model_type=model_type).to(device).to(torch.float32)
     
     # Wrap with FSDP if enabled
     if use_fsdp and torch.distributed.is_initialized():
@@ -64,7 +64,7 @@ def main():
     parser.add_argument("--output_folder", type=str)
     parser.add_argument("--caption_path", type=str)
     parser.add_argument("--guidance_scale", type=float, default=6.0)
-    parser.add_argument("--model_name", type=str, default="T2V-1.3B")
+    parser.add_argument("--model_type", type=str, default="T2V-1.3B")
     parser.add_argument("--config", type=str, help="Path to config file ")
     parser.add_argument("--fsdp", action="store_true", help="Enable FSDP to save GPU memory")
     args = parser.parse_args()
@@ -93,7 +93,7 @@ def main():
 
     model, encoder, scheduler, unconditional_dict = init_model(
         device=device, 
-        model_name=args.model_name,
+        model_type=args.model_type,
         use_fsdp=args.fsdp,
         config=config
     )
@@ -108,7 +108,11 @@ def main():
         if prompt_index >= len(dataset):
             continue
         prompt = dataset[prompt_index]
-
+        
+        if not prompt or not prompt[0].strip():
+            print(f"Warning: Empty prompt at index {prompt_index}")
+            continue
+        
         conditional_dict = encoder(
             text_prompts=prompt
         )
