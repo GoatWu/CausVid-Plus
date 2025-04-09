@@ -1,21 +1,10 @@
-# From Slow Bidirectional to Fast Autoregressive Video Diffusion Models [[Huggingface](https://huggingface.co/tianweiy/CausVid)][[Project](https://causvid.github.io/)]
+# CausVid-Plus
 
-Few-step Text-to-Video Generation.
+This repository contains an unofficial extension implementation of [CausVid](https://github.com/tianweiy/CausVid). The main extensions include:
 
-![image/jpeg](docs/teaser.png)
-
-> [**From Slow Bidirectional to Fast Autoregressive Video Diffusion Models**](https://causvid.github.io/),            
-> Tianwei Yin*, Qiang Zhang*, Richard Zhang, William T. Freeman, Frédo Durand, Eli Shechtman, Xun Huang (* equal contribution)       
-> *CVPR 2025 ([arXiv 2412.07772](https://arxiv.org/abs/2412.07772))*  
-
-## Abstract
-
-Current video diffusion models achieve impressive generation quality but struggle in interactive applications due to bidirectional attention dependencies. The generation of a single frame requires the model to process the entire sequence, including the future. We address this limitation by adapting a pretrained bidirectional diffusion transformer to an autoregressive transformer that generates frames on-the-fly. To further reduce latency, we extend distribution matching distillation (DMD) to videos, distilling 50-step diffusion model into a 4-step generator. To enable stable and high-quality distillation, we introduce a student initialization scheme based on teacher's ODE trajectories, as well as an asymmetric distillation strategy that supervises a causal student model with a bidirectional teacher. This approach effectively mitigates error accumulation in autoregressive generation, allowing long-duration video synthesis despite training on short clips. Our model achieves a total score of 84.27 on the VBench-Long benchmark, surpassing all previous video generation models. It enables fast streaming generation of high-quality videos at 9.4 FPS on a single GPU thanks to KV caching. Our approach also enables streaming video-to-video translation, image-to-video, and dynamic prompting in a zero-shot manner. 
-
-<div style="border-top: 2px solid red; padding-top: 10px; margin-top: 10px; margin-bottom: 10px;">
-  ⚠️ This repo is a work in progress. Expect frequent updates in the coming weeks.
-</div>
-
+- Added support for the Wan2.1-T2V-14B model
+- Modified data processing pipeline to generate approximately 50,000 prompt-video training pairs
+- Enhanced inference pipeline for generating more coherent long videos
 
 ## Environment Setup 
 
@@ -145,45 +134,7 @@ causvid/train_distillation.py \
 --no_visualize
 ```
 
-## TODO 
-- [ ] Checkpoints trained on larger / higher quality dataset.    
-- [ ] Image to Video Generation
-- [ ] Caching of cross-attention features
-
-## Notes
-
-- With the toy dataset, the performance saturates around 1K iterations.
-- DMD training likely requires larger, higher-quality datasets.
-- Timestep shift, guidance scale, or denoising steps may need fine-tuning.
-
-## Citation 
-
-If you find CausVid useful or relevant to your research, please kindly cite our papers:
-
-```bib
-@inproceedings{yin2025causvid,
-    title={From Slow Bidirectional to Fast Autoregressive Video Diffusion Models},
-    author={Yin, Tianwei and Zhang, Qiang and Zhang, Richard and Freeman, William T and Durand, Fredo and Shechtman, Eli and Huang, Xun},
-    booktitle={CVPR},
-    year={2025}
-}
-
-@inproceedings{yin2024improved,
-    title={Improved Distribution Matching Distillation for Fast Image Synthesis},
-    author={Yin, Tianwei and Gharbi, Micha{\"e}l and Park, Taesung and Zhang, Richard and Shechtman, Eli and Durand, Fredo and Freeman, William T},
-    booktitle={NeurIPS},
-    year={2024}
-}
-
-@inproceedings{yin2024onestep,
-    title={One-step Diffusion with Distribution Matching Distillation},
-    author={Yin, Tianwei and Gharbi, Micha{\"e}l and Zhang, Richard and Shechtman, Eli and Durand, Fr{\'e}do and Freeman, William T and Park, Taesung},
-    booktitle={CVPR},
-    year={2024}
-}
-```
-
 ## Acknowledgments
 
-Our implementation is largely based on the [Wan](https://github.com/Wan-Video/Wan2.1) model suite.
+Our implementation is largely based on the [Wan](https://github.com/Wan-Video/Wan2.1) model suite and the original [CausVid](https://github.com/tianweiy/CausVid) implementation.
 
