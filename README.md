@@ -136,10 +136,13 @@ causvid/train_ode.py \
 Causal DMD Training.   
 
 ```bash
-torchrun --nnodes 8 --nproc_per_node=8 --rdzv_id=5235 \
-    --rdzv_backend=c10d \
-    --rdzv_endpoint $MASTER_ADDR causvid/train_distillation.py \
-    --config_path  configs/wan_causal_dmd.yaml  --no_visualize
+torchrun --nnodes 8 --nproc_per_node=8 \
+--rdzv_id=5235 \
+--rdzv_backend=c10d \
+--rdzv_endpoint=${MASTER_ADDR}:${MASTER_PORT} \ 
+causvid/train_distillation.py \
+--config_path configs/wan_causal_dmd.yaml \
+--no_visualize
 ```
 
 ## TODO 
