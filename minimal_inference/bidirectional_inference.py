@@ -23,7 +23,7 @@ torch.set_grad_enabled(False)
 
 config = OmegaConf.load(args.config_path)
 
-pipe = BidirectionalInferencePipeline(config, device="cuda")
+pipe = BidirectionalInferencePipeline(config, device="cuda", model_type=config.model_type, num_frames=config.num_frames)
 
 state_dict = torch.load(os.path.join(args.checkpoint_folder, "model.pt"), map_location="cpu")[
     'generator']

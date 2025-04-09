@@ -19,7 +19,7 @@ torch.set_grad_enabled(False)
 
 config = OmegaConf.load(args.config_path)
 
-pipeline = InferencePipeline(config, device="cuda")
+pipeline = InferencePipeline(config, device="cuda", model_type=config.model_type, num_frames=config.num_frames)
 pipeline.to(device="cuda", dtype=torch.bfloat16)
 
 state_dict = torch.load(os.path.join(args.checkpoint_folder, "model.pt"), map_location="cpu")[

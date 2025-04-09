@@ -22,7 +22,7 @@ torch.set_grad_enabled(False)
 
 config = OmegaConf.load(args.config_path)
 
-pipeline = InferencePipeline(config, device="cuda")
+pipeline = InferencePipeline(config, device="cuda", model_type=config.model_type, num_frames=config.num_frames)
 pipeline.to(device="cuda", dtype=torch.bfloat16)
 assert args.num_overlap_frames % pipeline.num_frame_per_block == 0, "num_overlap_frames must be divisible by num_frame_per_block"
 
