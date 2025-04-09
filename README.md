@@ -20,8 +20,6 @@ Also download the Wan base models from [here](https://github.com/Wan-Video/Wan2.
 
 ## Inference Example 
 
-First download the checkpoints: [Autoregressive Model](https://huggingface.co/tianweiy/CausVid/tree/main/autoregressive_checkpoint), [Bidirectional Model 1](https://huggingface.co/tianweiy/CausVid/tree/main/bidirectional_checkpoint1) or [Bidirectional Model 2](https://huggingface.co/tianweiy/CausVid/tree/main/bidirectional_checkpoint2) (performs slightly better). 
-
 ### Autoregressive 3-step 5-second Video Generation  
 
 ```bash 
@@ -31,28 +29,26 @@ python minimal_inference/autoregressive_inference.py --config_path configs/wan_c
 ### Autoregressive 3-step long Video Generation
 
 ```bash 
-python minimal_inference/longvideo_autoregressive_inference.py --config_path configs/wan_causal_dmd.yaml --checkpoint_folder XXX  --output_folder XXX   --prompt_file_path XXX   --num_rollout XXX 
+python minimal_inference/longvideo_autoregressive_inference.py --config_path configs/wan_causal_dmd.yaml --checkpoint_folder XXX  --output_folder XXX --prompt_file_path XXX --num_rollout XXX 
 ```
 
 ### Bidirectional 3-step 5-second Video Generation
 
 ```bash 
-python minimal_inference/bidirectional_inference.py --config_path configs/wan_bidirectional_dmd_from_scratch.yaml --checkpoint_folder XXX  --output_folder XXX   --prompt_file_path XXX 
+python minimal_inference/bidirectional_inference.py --config_path configs/wan_bidirectional_dmd_from_scratch.yaml --checkpoint_folder XXX --output_folder XXX --prompt_file_path XXX 
 ```
 
 ## Training and Evaluation  
 
 ### Dataset Preparation 
 
-We use the [MixKit Dataset](https://huggingface.co/datasets/LanguageBind/Open-Sora-Plan-v1.1.0/tree/main/all_mixkit) (6K videos) as a toy example for distillation. 
+We use the [MixKit Dataset](https://huggingface.co/datasets/LanguageBind/Open-Sora-Plan-v1.1.0/tree/main/all_mixkit) (6K videos, 5w prompts) for distillation. 
 
-To prepare the dataset, follow these steps. You can also download the final LMDB dataset from [here](https://huggingface.co/tianweiy/CausVid/tree/main/mixkit_latents_lmdb)
+To prepare the dataset, follow these steps.
 
 ```bash
 # download the annotation files
 huggingface-cli download LanguageBind/Open-Sora-Plan-v1.1.0 --repo-type dataset --include anno_jsons/video_mixkit_65f_54735.json --local-dir ./sample_dataset
-
-huggingface-cli download LanguageBind/Open-Sora-Plan-v1.1.0 --repo-type dataset --include anno_jsons/video_mixkit_513f_1997.json --local-dir ./sample_dataset
 
 # download and extract video from the Mixkit dataset 
 python distillation_data/download_mixkit.py --local_dir ./datasets
@@ -92,26 +88,9 @@ python causvid/ode_data/create_lmdb_iterative.py --data_path ./datasets/odes/65f
 
 ## Training 
 
-Please first modify the wandb account information in the respective config.  
+Please first modify the wandb account information in the respective config.
 
-Bidirectional DMD Training
-
-```bash
-torchrun --nnodes 8 --nproc_per_node=8 --rdzv_id=5235 \
-    --rdzv_backend=c10d \
-    --rdzv_endpoint $MASTER_ADDR causvid/train_distillation.py \
-    --config_path  configs/wan_bidirectional_dmd_from_scratch.yaml 
-```
-
-ODE Dataset Generation. We generate a total of 1.5K dataset pairs, which can also be downloaded from [here](https://huggingface.co/tianweiy/CausVid/tree/main/mixkit_ode_lmdb) 
-
-```bash
-torchrun --nproc_per_node 8 causvid/models/wan/generate_ode_pairs.py --output_folder  XXX --caption_path sample_dataset/mixkit_prompts.txt
-
-python causvid/ode_data/create_lmdb_iterative.py  --data_path XXX --lmdb_path XXX 
-```
-
-Causal ODE Pretraining. You can also skip this step and download the ode finetuned checkpoint from [here](https://huggingface.co/tianweiy/CausVid/tree/main/wan_causal_ode_checkpoint_model_003000) 
+Causal ODE Pretraining. 
 
 ```bash
 torchrun --nnodes 8 --nproc_per_node=8 \
