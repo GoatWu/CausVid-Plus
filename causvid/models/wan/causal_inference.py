@@ -38,6 +38,7 @@ class InferencePipeline(torch.nn.Module):
             raise ValueError(f"Model type {model_type} not supported")
 
         self.frame_seq_length = 1560
+        self.num_frames = num_frames
 
         self.kv_cache1 = None
         self.kv_cache2 = None
@@ -58,8 +59,8 @@ class InferencePipeline(torch.nn.Module):
 
         for _ in range(self.num_transformer_blocks):
             kv_cache1.append({
-                "k": torch.zeros([batch_size, 32760, 12, 128], dtype=dtype, device=device),
-                "v": torch.zeros([batch_size, 32760, 12, 128], dtype=dtype, device=device)
+                "k": torch.zeros([batch_size, 1560 * self.num_frames, self.num_heads, 128], dtype=dtype, device=device),
+                "v": torch.zeros([batch_size, 1560 * self.num_frames, self.num_heads, 128], dtype=dtype, device=device)
             })
 
         self.kv_cache1 = kv_cache1  # always store the clean cache
@@ -72,8 +73,8 @@ class InferencePipeline(torch.nn.Module):
 
         for _ in range(self.num_transformer_blocks):
             crossattn_cache.append({
-                "k": torch.zeros([batch_size, 512, 12, 128], dtype=dtype, device=device),
-                "v": torch.zeros([batch_size, 512, 12, 128], dtype=dtype, device=device),
+                "k": torch.zeros([batch_size, 512, self.num_heads, 128], dtype=dtype, device=device),
+                "v": torch.zeros([batch_size, 512, self.num_heads, 128], dtype=dtype, device=device),
                 "is_init": False
             })
 
