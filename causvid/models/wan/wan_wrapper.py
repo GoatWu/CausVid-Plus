@@ -93,7 +93,7 @@ class WanVAEWrapper(VAEInterface):
 
 
 class WanDiffusionWrapper(DiffusionModelInterface):
-    def __init__(self, model_type="T2V-1.3B", num_frames = 17):
+    def __init__(self, model_type="T2V-1.3B", num_frames = 21):
         super().__init__()
 
         self.model = WanModel.from_pretrained(f"wan_models/Wan2.1-{model_type}/")
@@ -166,8 +166,9 @@ class WanDiffusionWrapper(DiffusionModelInterface):
         self, noisy_image_or_video: torch.Tensor, conditional_dict: dict,
         timestep: torch.Tensor, kv_cache: Optional[List[dict]] = None,
         crossattn_cache: Optional[List[dict]] = None,
-        current_start: Optional[int] = None,
-        current_end: Optional[int] = None
+        kv_start: Optional[int] = None,
+        kv_end: Optional[int] = None,
+        rope_start: Optional[int] = None
     ) -> torch.Tensor:
         prompt_embeds = conditional_dict["prompt_embeds"]
 
@@ -184,8 +185,9 @@ class WanDiffusionWrapper(DiffusionModelInterface):
                 seq_len=self.seq_len,
                 kv_cache=kv_cache,
                 crossattn_cache=crossattn_cache,
-                current_start=current_start,
-                current_end=current_end
+                kv_start=kv_start,
+                kv_end=kv_end,
+                rope_start=rope_start
             ).permute(0, 2, 1, 3, 4)
         else:
             flow_pred = self.model(
@@ -204,7 +206,7 @@ class WanDiffusionWrapper(DiffusionModelInterface):
 
 
 class CausalWanDiffusionWrapper(WanDiffusionWrapper):
-    def __init__(self, model_type="T2V-1.3B", num_frames = 17):
+    def __init__(self, model_type="T2V-1.3B", num_frames = 21):
         super().__init__(model_type=model_type, num_frames=num_frames)
 
         self.model = CausalWanModel.from_pretrained(

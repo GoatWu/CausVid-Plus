@@ -32,7 +32,6 @@ def causal_rope_apply(x, grid_sizes, freqs, start_frame=0):
 
     # loop over samples
     output = []
-
     for i, (f, h, w) in enumerate(grid_sizes.tolist()):
         seq_len = f * h * w
 
@@ -81,7 +80,7 @@ class CausalWanSelfAttention(nn.Module):
         self.norm_q = WanRMSNorm(dim, eps=eps) if qk_norm else nn.Identity()
         self.norm_k = WanRMSNorm(dim, eps=eps) if qk_norm else nn.Identity()
 
-    def forward(self, x, seq_lens, grid_sizes, freqs, block_mask, kv_cache=None, current_start=0, current_end=0):
+    def forward(self, x, seq_lens, grid_sizes, freqs, block_mask, kv_cache=None, kv_start=0, kv_end=0, rope_start=0):
         r"""
         Args:
             x(Tensor): Shape [B, L, num_heads, C / num_heads]
@@ -89,6 +88,10 @@ class CausalWanSelfAttention(nn.Module):
             grid_sizes(Tensor): Shape [B, 3], the second dimension contains (F, H, W)
             freqs(Tensor): Rope freqs, shape [1024, C / num_heads / 2]
             block_mask (BlockMask)
+            kv_cache (dict, optional): KV cache for attention
+            kv_start (int): Starting position in KV cache
+            kv_end (int): Ending position in KV cache
+            rope_start (int): Starting position for rope encoding
         """
         b, s, n, d = *x.shape[:2], self.num_heads, self.head_dim
 
@@ -133,14 +136,14 @@ class CausalWanSelfAttention(nn.Module):
             )[:, :, :-padded_length].transpose(2, 1)
         else:
             roped_query = causal_rope_apply(
-                q, grid_sizes, freqs, start_frame=current_start // math.prod(grid_sizes[0][1:]).item()).type_as(v)
+                q, grid_sizes, freqs, start_frame=rope_start // math.prod(grid_sizes[0][1:]).item()).type_as(v)
             roped_key = causal_rope_apply(
-                k, grid_sizes, freqs, start_frame=current_start // math.prod(grid_sizes[0][1:]).item()).type_as(v)
+                k, grid_sizes, freqs, start_frame=rope_start // math.prod(grid_sizes[0][1:]).item()).type_as(v)
 
-            kv_cache["k"][:, current_start:current_end] = roped_key
-            kv_cache["v"][:, current_start:current_end] = v
+            kv_cache["k"][:, kv_start:kv_end] = roped_key
+            kv_cache["v"][:, kv_start:kv_end] = v
 
-            x = attention(roped_query, kv_cache["k"][:, :current_end], kv_cache["v"][:, :current_end])
+            x = attention(roped_query, kv_cache["k"][:, :kv_end], kv_cache["v"][:, :kv_end])
 
         # output
         x = x.flatten(2)
@@ -200,8 +203,9 @@ class CausalWanAttentionBlock(nn.Module):
         block_mask,
         kv_cache=None,
         crossattn_cache=None,
-        current_start=0,
-        current_end=0
+        kv_start=0,
+        kv_end=0,
+        rope_start=0
     ):
         r"""
         Args:
@@ -210,6 +214,14 @@ class CausalWanAttentionBlock(nn.Module):
             seq_lens(Tensor): Shape [B], length of each sequence in batch
             grid_sizes(Tensor): Shape [B, 3], the second dimension contains (F, H, W)
             freqs(Tensor): Rope freqs, shape [1024, C / num_heads / 2]
+            context(Tensor): Text embeddings
+            context_lens(Tensor): Length of text embeddings
+            block_mask(BlockMask): Attention mask
+            kv_cache(dict, optional): KV cache for attention
+            crossattn_cache(dict, optional): Cross attention cache
+            kv_start(int): Starting position in KV cache
+            kv_end(int): Ending position in KV cache
+            rope_start(int): Starting position for rope encoding
         """
         num_frames, frame_seqlen = e.shape[1], x.shape[1] // e.shape[1]
         # assert e.dtype == torch.float32
@@ -222,7 +234,7 @@ class CausalWanAttentionBlock(nn.Module):
             (self.norm1(x).unflatten(dim=1, sizes=(num_frames, frame_seqlen))
              * (1 + e[1]) + e[0]).flatten(1, 2),
             seq_lens, grid_sizes,
-            freqs, block_mask, kv_cache, current_start, current_end)
+            freqs, block_mask, kv_cache, kv_start, kv_end, rope_start)
 
         # with amp.autocast(dtype=torch.float32):
         x = x + (y.unflatten(dim=1, sizes=(num_frames, frame_seqlen))
@@ -465,8 +477,9 @@ class CausalWanModel(ModelMixin, ConfigMixin):
         y=None,
         kv_cache: dict = None,
         crossattn_cache: dict = None,
-        current_start: int = 0,
-        current_end: int = 0
+        kv_start: int = 0,
+        kv_end: int = 0,
+        rope_start: int = 0
     ):
         r"""
         Run the diffusion model with kv caching.
@@ -487,6 +500,16 @@ class CausalWanModel(ModelMixin, ConfigMixin):
                 CLIP image features for image-to-video mode
             y (List[Tensor], *optional*):
                 Conditional video inputs for image-to-video mode, same shape as x
+            kv_cache (dict, optional):
+                KV cache for attention
+            crossattn_cache (dict, optional):
+                Cross attention cache
+            kv_start (int):
+                Starting position in KV cache
+            kv_end (int):
+                Ending position in KV cache
+            rope_start (int):
+                Starting position for rope encoding
 
         Returns:
             List[Tensor]:
@@ -562,8 +585,9 @@ class CausalWanModel(ModelMixin, ConfigMixin):
                     {
                         "kv_cache": kv_cache[block_index],
                         "crossattn_cache": crossattn_cache[block_index],
-                        "current_start": current_start,
-                        "current_end": current_end
+                        "kv_start": kv_start,
+                        "kv_end": kv_end,
+                        "rope_start": rope_start
                     }
                 )
                 x = block(x, **kwargs)

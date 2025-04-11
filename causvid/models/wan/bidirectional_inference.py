@@ -8,7 +8,7 @@ import torch
 
 
 class BidirectionalInferencePipeline(torch.nn.Module):
-    def __init__(self, args, device, model_type="T2V-1.3B", num_frames = 17):
+    def __init__(self, args, device, model_type="T2V-1.3B", num_frames = 21):
         super().__init__()
         # Step 1: Initialize all models
         self.generator_model_name = getattr(

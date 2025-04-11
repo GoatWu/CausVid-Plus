@@ -13,8 +13,9 @@ class DiffusionModelInterface(ABC, torch.nn.Module):
         self, noisy_image_or_video: torch.Tensor, conditional_dict: dict,
         timestep: torch.Tensor, kv_cache: Optional[List[dict]] = None,
         crossattn_cache: Optional[List[dict]] = None,
-        current_start: Optional[int] = None,
-        current_end: Optional[int] = None
+        kv_start: Optional[int] = None,
+        kv_end: Optional[int] = None,
+        rope_start: Optional[int] = None
     ) -> torch.Tensor:
         """
         A method to run diffusion model.
@@ -24,8 +25,9 @@ class DiffusionModelInterface(ABC, torch.nn.Module):
             - timestep: a tensor with shape [B, F]  where the number of frame is 1 for images.
             all data should be on the same device as the model.
             - kv_cache: a list of dictionaries containing the key and value tensors for each attention layer.
-            - current_start: the start index of the current frame in the sequence.
-            - current_end: the end index of the current frame in the sequence.
+            - kv_start: the start index of the current frame in the KV cache.
+            - kv_end: the end index of the current frame in the KV cache.
+            - rope_start: the start position for rope encoding.
         Output: a tensor with shape [B, F, C, H, W] where the number of frame is 1 for images.
         We always expect a X0 prediction form for the output.
         """

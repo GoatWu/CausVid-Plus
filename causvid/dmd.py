@@ -13,7 +13,7 @@ import torch
 
 
 class DMD(nn.Module):
-    def __init__(self, args, device, model_type="T2V-1.3B", num_frames = 17):
+    def __init__(self, args, device, model_type="T2V-1.3B", num_frames = 21):
         """
         Initialize the DMD (Distribution Matching Distillation) module.
         This class is self-contained and compute generator and fake score losses
