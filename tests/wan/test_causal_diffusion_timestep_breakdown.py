@@ -24,7 +24,7 @@ conditional_dict = encoder(
 device = "cuda"
 
 noise = torch.randn(
-    1, 17, 16, 60, 104, generator=torch.Generator().manual_seed(42), dtype=torch.float32
+    1,21, 16, 60, 104, generator=torch.Generator().manual_seed(42), dtype=torch.float32
 ).to("cuda")
 
 scheduler = FlowMatchScheduler(shift=8.0, sigma_min=0.0, extra_one_step=True)
@@ -37,7 +37,7 @@ video_latent = data[prompt][:, -1].cuda().to(torch.bfloat16)
 
 for timestep in [100, 200, 300, 400, 500, 600, 700, 800, 900]:
     timestep = timestep * \
-        torch.ones([1, 17], device="cuda", dtype=torch.float32)
+        torch.ones([1, 21], device="cuda", dtype=torch.float32)
 
     noisy_latent = scheduler.add_noise(
         video_latent.flatten(0, 1),

@@ -30,7 +30,7 @@ pipeline.generator.load_state_dict(
 dataset = TextDataset('sample_dataset/MovieGenVideoBench.txt')
 
 sampled_noise = torch.randn(
-    [1, 17, 16, 60, 104], device="cuda", dtype=torch.bfloat16
+    [1, 21, 16, 60, 104], device="cuda", dtype=torch.bfloat16
 )
 
 for prompt_index in tqdm(range(len(dataset))):

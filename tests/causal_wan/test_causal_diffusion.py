@@ -21,10 +21,10 @@ conditional_dict = encoder(
 )
 
 noise = torch.randn(
-    2, 17, 16, 60, 104, generator=torch.Generator().manual_seed(42), dtype=torch.float32
+    2, 21, 16, 60, 104, generator=torch.Generator().manual_seed(42), dtype=torch.float32
 ).to("cuda")
 
-timetep = 999 * torch.ones([2, 17], device="cuda", dtype=torch.long)
+timetep = 999 * torch.ones([2,21], device="cuda", dtype=torch.long)
 
 with torch.no_grad():
     output = model(noise, conditional_dict, timetep)

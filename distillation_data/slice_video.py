@@ -5,6 +5,7 @@ import cv2
 from tqdm import tqdm
 import subprocess
 import sys
+from concurrent.futures import ProcessPoolExecutor, as_completed
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Process videos based on annotation json')
@@ -12,6 +13,7 @@ def parse_args():
     parser.add_argument('--output_folder', type=str, required=True, help='Folder to save processed videos')
     parser.add_argument('--anno_json', type=str, required=True, help='Path to annotation json file')
     parser.add_argument('--output_json', type=str, default='cap_to_video.json', help='Name of the output json file')
+    parser.add_argument('--num_workers', type=int, default=4, help='Number of worker processes for parallel processing')
     return parser.parse_args()
 
 def is_ffmpeg_available():
@@ -154,6 +156,67 @@ def process_video_segments(input_path, output_folder, segments):
     
     return results
 
+def process_81_frame_segments(input_path, output_folder, segments, fps):
+    """Process video segments with 81-frame chunks using corresponding 65-frame prompts"""
+    if not os.path.exists(input_path):
+        tqdm.write(f"Error: Input video not found: {input_path}")
+        return {}
+
+    video_name = os.path.basename(input_path)
+    base_name = os.path.splitext(video_name)[0]
+    results = {}
+    
+    # Sort segments by start frame
+    segments = sorted(segments, key=lambda x: int(x['frame_idx'].split(':')[0]))
+    
+    # Process each segment
+    for i in range(0, len(segments), 2):
+        if i + 1 >= len(segments):
+            break
+            
+        # Get current segment info
+        curr_segment = segments[i]
+        curr_start, _ = map(int, curr_segment['frame_idx'].split(':'))
+        new_end = curr_start + 81  # exclusive end
+        
+        # Generate output path
+        output_name = f"{base_name}_{curr_start}_{new_end}.mp4"
+        output_path = os.path.join(output_folder, output_name)
+        
+        # Skip if already exists
+        if os.path.exists(output_path):
+            results[curr_segment['cap']] = output_name
+            continue
+        
+        # Process with FFmpeg
+        if cut_video_ffmpeg(input_path, output_path, curr_start, new_end, fps):
+            results[curr_segment['cap']] = output_name
+    
+    return results
+
+def process_single_video(args_tuple):
+    """Process a single video with its segments"""
+    video_name, segments, input_folder, output_folder = args_tuple
+    input_video_path = os.path.join(input_folder, video_name)
+    
+    # Get video FPS
+    cap = cv2.VideoCapture(input_video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    cap.release()
+    
+    # Sort segments by start frame
+    segments = sorted(segments, key=lambda x: int(x['frame_idx'].split(':')[0]))
+    
+    # Process segments
+    segment_results = process_81_frame_segments(
+        input_video_path, 
+        output_folder, 
+        segments,
+        fps
+    )
+    
+    return video_name, segment_results
+
 def main():
     args = parse_args()
     
@@ -177,59 +240,47 @@ def main():
     for annotation in annotations:
         full_path = annotation['path']
         video_name = os.path.basename(full_path)
+        frame_idx = annotation['frame_idx']
+        
         if video_name not in video_segments:
             video_segments[video_name] = []
-        video_segments[video_name].append(annotation)
+            video_segments[video_name].append(annotation)
+        else:
+            # Check if frame_idx already exists
+            existing_frame_indices = [seg['frame_idx'] for seg in video_segments[video_name]]
+            if frame_idx not in existing_frame_indices:
+                video_segments[video_name].append(annotation)
     
     print(f"Processing {len(video_segments)} videos")
     
     # Process each video
     stats = {"processed": 0, "skipped": 0, "failed": 0}
     
-    with tqdm(total=len(video_segments), desc="Processing videos") as pbar:
-        for video_name, segments in video_segments.items():
-            input_video_path = os.path.join(args.input_folder, video_name)
-            
-            # Process all segments of this video at once
-            pbar.set_description(f"Video: {video_name[:20]} ({len(segments)} segments)")
-            
-            # Check for pre-existing segments
-            pre_existing = 0
-            for segment in segments:
-                frame_idx = segment['frame_idx']
-                start_frame, end_frame = map(int, frame_idx.split(':'))
-                output_name = f"{os.path.splitext(video_name)[0]}_{start_frame}_{end_frame}.mp4"
-                output_path = os.path.join(args.output_folder, output_name)
+    # Prepare arguments for parallel processing
+    process_args = [
+        (video_name, segments, args.input_folder, args.output_folder)
+        for video_name, segments in video_segments.items()
+    ]
+    
+    # Process videos in parallel
+    with ProcessPoolExecutor(max_workers=args.num_workers) as executor:
+        futures = [executor.submit(process_single_video, arg) for arg in process_args]
+        
+        with tqdm(total=len(futures), desc="Processing videos") as pbar:
+            for future in as_completed(futures):
+                video_name, segment_results = future.result()
                 
-                if os.path.exists(output_path):
-                    cap_to_video[segment['cap']] = output_name
-                    pre_existing += 1
-            
-            # Skip processing if all segments already exist
-            if pre_existing == len(segments):
-                stats["skipped"] += len(segments)
+                # Update mappings and stats
+                for cap, video_file in segment_results.items():
+                    cap_to_video[cap] = video_file
+                    stats["processed"] += 1
+                
+                # Count failed segments
+                expected_segments = len(video_segments[video_name]) // 2
+                failed = expected_segments - len(segment_results)
+                stats["failed"] += failed
+                
                 pbar.update(1)
-                continue
-            
-            # Process remaining segments
-            segment_results = process_video_segments(
-                input_video_path, 
-                args.output_folder, 
-                [s for s in segments if s['cap'] not in cap_to_video]
-            )
-            
-            # Update mappings and stats
-            for cap, video_file in segment_results.items():
-                cap_to_video[cap] = video_file
-                stats["processed"] += 1
-            
-            # Count failed segments
-            failed = len(segments) - pre_existing - len(segment_results)
-            stats["skipped"] += pre_existing
-            stats["failed"] += failed
-            
-            # Update progress
-            pbar.update(1)
     
     # Save caption to video mapping
     output_json_path = args.output_json

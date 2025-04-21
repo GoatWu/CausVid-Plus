@@ -20,7 +20,7 @@ unconditional_dict = dmd_model.text_encoder(text_prompts=[config.negative_prompt
 
 print("Test 1: Backward Simulation")
 
-image_or_video_shape = [1, 17, 16, 60, 104]
+image_or_video_shape = [1, 21, 16, 60, 104]
 
 simulated_input = dmd_model._consistency_backward_simulation(
     noise=torch.randn(image_or_video_shape,

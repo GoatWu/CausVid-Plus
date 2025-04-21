@@ -49,14 +49,14 @@ for index in tqdm(range(len(dataset))):
     )
 
     latents = torch.randn(
-        1, 16, 17, 60, 104, generator=torch.Generator().manual_seed(42), dtype=torch.float32
+        1, 16, 21, 60, 104, generator=torch.Generator().manual_seed(42), dtype=torch.float32
     ).to("cuda").permute(0, 2, 1, 3, 4)
 
     with torch.amp.autocast(dtype=torch.float32, device_type=torch.device("cuda:0").type):
 
         for progress_id, t in enumerate(tqdm(scheduler.timesteps)):
             timestep = t * \
-                torch.ones([1, 17], device=device, dtype=torch.float32)
+                torch.ones([1, 21], device=device, dtype=torch.float32)
 
             x0_pred_cond = model(
                 latents, conditional_dict, timestep
