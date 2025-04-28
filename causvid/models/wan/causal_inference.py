@@ -58,20 +58,35 @@ class InferencePipeline(torch.nn.Module):
         if self.num_frame_per_block > 1:
             self.generator.model.num_frame_per_block = self.num_frame_per_block
 
+        # self.neg_prompt = "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量，JPEG压缩残留，丑陋的，残缺的，多余的手指，画得不好的手部，画得不好的脸部，畸形的，毁容的，形态畸形的肢体，手指融合，静止不动的画面，杂乱的背景，三条腿，背景人很多，倒着走"
+        # self.sample_guide_scale = 3.5
+
     def _initialize_kv_cache(self, batch_size, dtype, device):
         """
         Initialize a Per-GPU KV cache for the Wan model with sliding window mechanism.
         The cache size is determined by frame_seq_length * num_frames.
         """
         kv_cache1 = []
+        # kv_cache2 = []
 
         for _ in range(self.num_transformer_blocks):
             kv_cache1.append({
                 "k": torch.zeros([batch_size, self.window_size, self.num_heads, 128], dtype=dtype, device=device),
                 "v": torch.zeros([batch_size, self.window_size, self.num_heads, 128], dtype=dtype, device=device)
             })
+            # kv_cache2.append({
+            #     "k": torch.zeros([batch_size, self.window_size, self.num_heads, 128], dtype=dtype, device='cpu'),
+            #     "v": torch.zeros([batch_size, self.window_size, self.num_heads, 128], dtype=dtype, device='cpu')
+            # })
 
         self.kv_cache1 = kv_cache1  # always store the clean cache
+    #     self.kv_cache2 = kv_cache2  # always store the clean cache
+
+    # def kv_to_device(self, idx=1, device='cpu'):
+    #     target = self.kv_cache1 if idx == 1 else self.kv_cache2
+    #     for block in target:
+    #         block["k"] = block["k"].to(device)
+    #         block["v"] = block["v"].to(device)
 
     def _initialize_crossattn_cache(self, batch_size, dtype, device):
         """
@@ -134,6 +149,9 @@ class InferencePipeline(torch.nn.Module):
         conditional_dict = self.text_encoder(
             text_prompts=text_prompts
         )
+        # unconditional_dict = self.text_encoder(
+        #     text_prompts=[self.neg_prompt]
+        # )
 
         output = torch.zeros(
             [batch_size, infer_blocks * self.num_frame_per_block, num_channels, height, width],
@@ -178,6 +196,8 @@ class InferencePipeline(torch.nn.Module):
                     [batch_size, self.num_frame_per_block], device=noise.device, dtype=torch.int64) * current_timestep
 
                 if index < len(self.denoising_step_list) - 1:
+                    # self.kv_to_device(idx=2, device='cpu')
+                    # self.kv_to_device(idx=1, device='cuda')
                     denoised_pred = self.generator(
                         noisy_image_or_video=noisy_input,
                         conditional_dict=conditional_dict,
@@ -188,6 +208,20 @@ class InferencePipeline(torch.nn.Module):
                         kv_end=kv_end,
                         rope_start=self.rope_start
                     )
+                    # self.kv_to_device(idx=1, device='cpu')
+                    # self.kv_to_device(idx=2, device='cuda')
+                    # uncond_denoised_pred = self.generator(
+                    #     noisy_image_or_video=noisy_input,
+                    #     conditional_dict=unconditional_dict,
+                    #     timestep=timestep,
+                    #     kv_cache=self.kv_cache2,
+                    #     crossattn_cache=self.crossattn_cache,
+                    #     kv_start=self.kv_start,
+                    #     kv_end=kv_end,
+                    #     rope_start=self.rope_start
+                    # )
+                    # denoised_pred = uncond_denoised_pred + self.sample_guide_scale * (denoised_pred - uncond_denoised_pred)
+
                     next_timestep = self.denoising_step_list[index + 1]
                     noisy_input = self.scheduler.add_noise(
                         denoised_pred.flatten(0, 1),
@@ -198,6 +232,8 @@ class InferencePipeline(torch.nn.Module):
                     ).unflatten(0, denoised_pred.shape[:2])
                 else:
                     # For getting real output
+                    # self.kv_to_device(idx=2, device='cpu')
+                    # self.kv_to_device(idx=1, device='cuda')
                     denoised_pred = self.generator(
                         noisy_image_or_video=noisy_input,
                         conditional_dict=conditional_dict,
@@ -208,10 +244,25 @@ class InferencePipeline(torch.nn.Module):
                         kv_end=kv_end,
                         rope_start=self.rope_start
                     )
+                    # self.kv_to_device(idx=1, device='cpu')
+                    # self.kv_to_device(idx=2, device='cuda')
+                    # uncond_denoised_pred = self.generator(
+                    #     noisy_image_or_video=noisy_input,
+                    #     conditional_dict=unconditional_dict,
+                    #     timestep=timestep,
+                    #     kv_cache=self.kv_cache2,
+                    #     crossattn_cache=self.crossattn_cache,
+                    #     kv_start=self.kv_start,
+                    #     kv_end=kv_end,
+                    #     rope_start=self.rope_start
+                    # )
+                    # denoised_pred = uncond_denoised_pred + self.sample_guide_scale * (denoised_pred - uncond_denoised_pred)
 
             output[:, block_index * self.num_frame_per_block:(
                 block_index + 1) * self.num_frame_per_block] = denoised_pred
             
+            # self.kv_to_device(idx=2, device='cpu')
+            # self.kv_to_device(idx=1, device='cuda')
             self.generator(
                 noisy_image_or_video=denoised_pred,
                 conditional_dict=conditional_dict,
@@ -222,6 +273,18 @@ class InferencePipeline(torch.nn.Module):
                 kv_end=kv_end,
                 rope_start=self.rope_start
             )
+            # self.kv_to_device(idx=1, device='cpu')
+            # self.kv_to_device(idx=2, device='cuda')
+            # self.generator(
+            #     noisy_image_or_video=denoised_pred,
+            #     conditional_dict=unconditional_dict,
+            #     timestep=timestep * 0,
+            #     kv_cache=self.kv_cache2,
+            #     crossattn_cache=self.crossattn_cache,
+            #     kv_start=self.kv_start,
+            #     kv_end=kv_end,
+            #     rope_start=self.rope_start
+            # )
         
             # Update positions for next block
             r_shift_length = self.num_frame_per_block * self.frame_seq_length
