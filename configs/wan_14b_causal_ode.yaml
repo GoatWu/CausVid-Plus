@@ -1,0 +1,37 @@
+model_name: causal_wan
+model_type: T2V-14B
+generator_grad:
+  model: true
+denoising_step_list:
+- 1000
+- 934
+- 862
+- 756
+- 603
+- 410
+- 250
+- 140
+- 74
+- 0
+generator_task: causal_video
+generator_fsdp_wrap_strategy: size
+text_encoder_fsdp_wrap_strategy: size
+mixed_precision: true
+seed: 0
+wandb_host: https://api.wandb.ai
+wandb_key: 
+wandb_entity: 
+wandb_project: causvid
+wandb_name: wan_causal_ode
+sharding_strategy: hybrid_full
+lr: 2.0e-06
+beta1: 0.9
+beta2: 0.999
+data_path: /data/CausVid-Plus/datasets/mixkit_odes_lmdb/81f/14b/
+batch_size: 1
+log_iters: 500
+output_path: wan_14b_causal_ode
+distillation_loss: ode
+gradient_checkpointing: true
+num_frame_per_block: 3
+num_frames: 21

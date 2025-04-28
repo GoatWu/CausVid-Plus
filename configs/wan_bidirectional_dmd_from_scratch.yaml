@@ -1,4 +1,5 @@
 model_name: wan
+model_type: T2V-1.3B
 generator_fsdp_wrap_strategy: size
 real_score_fsdp_wrap_strategy: size
 fake_score_fsdp_wrap_strategy: size
@@ -46,3 +47,4 @@ output_path: /mnt/localssd/wan_bidirectional_dmd_from_scratch
 distillation_loss: dmd
 gradient_checkpointing: true
 backward_simulation: false
+num_frames: 21

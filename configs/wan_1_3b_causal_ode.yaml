@@ -1,4 +1,5 @@
 model_name: causal_wan
+model_type: T2V-1.3B
 generator_grad:
   model: true
 denoising_step_list:
@@ -11,19 +12,20 @@ generator_fsdp_wrap_strategy: size
 text_encoder_fsdp_wrap_strategy: size
 mixed_precision: true
 seed: 0
-wandb_host: WANDB_HOST
-wandb_key: WANDB_KEY
-wandb_entity: tyin
+wandb_host: https://api.wandb.ai
+wandb_key: 
+wandb_entity: 
 wandb_project: causvid
 wandb_name: wan_causal_ode
 sharding_strategy: hybrid_full
 lr: 2.0e-06
 beta1: 0.9
 beta2: 0.999
-data_path: mixkit_ode_lmdb
-batch_size: 2
-log_iters: 200
-output_path: /mnt/localssd/wan_causal_ode
+data_path: /data/CausVid-Plus/datasets/mixkit_odes_lmdb/81f/1_3b/
+batch_size: 1
+log_iters: 500
+output_path: wan_1_3b_causal_ode
 distillation_loss: ode
 gradient_checkpointing: true
 num_frame_per_block: 3
+num_frames: 21
